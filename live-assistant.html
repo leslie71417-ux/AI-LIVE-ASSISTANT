@@ -1,0 +1,949 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>直播实时助手</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Noto+Sans+JP:wght@300;400;500;700&family=Noto+Sans+SC:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0d0d0f;
+    --surface: #16161a;
+    --surface2: #1e1e24;
+    --border: #2a2a35;
+    --accent: #7c5cfc;
+    --accent2: #fc5c7d;
+    --green: #00d4aa;
+    --yellow: #ffd166;
+    --text: #e8e8f0;
+    --muted: #666680;
+    --red: #ff6b6b;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'Noto Sans SC', 'Noto Sans JP', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    user-select: none;
+  }
+
+  /* ── TOP BAR ── */
+  .topbar {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 10px 20px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+  .app-title {
+    font-family: 'Space Mono', monospace;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 2px;
+    color: var(--accent);
+    text-transform: uppercase;
+  }
+  .status-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--muted);
+    transition: background 0.3s;
+    flex-shrink: 0;
+  }
+  .status-dot.active { background: var(--green); box-shadow: 0 0 8px var(--green); animation: pulse 1.5s infinite; }
+  .status-dot.recording { background: var(--red); box-shadow: 0 0 8px var(--red); animation: pulse 0.8s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+
+  .status-text {
+    font-family: 'Space Mono', monospace;
+    font-size: 10px;
+    color: var(--muted);
+  }
+
+  .spacer { flex: 1; }
+
+  /* API KEY input */
+  .api-input-wrap {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .api-label {
+    font-family: 'Space Mono', monospace;
+    font-size: 9px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+  }
+  .api-input {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 5px 10px;
+    color: var(--text);
+    font-family: 'Space Mono', monospace;
+    font-size: 10px;
+    width: 200px;
+    outline: none;
+  }
+  .api-input:focus { border-color: var(--accent); }
+
+  /* Control buttons */
+  .btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 7px 14px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--surface2);
+    color: var(--text);
+    font-family: 'Space Mono', monospace;
+    font-size: 10px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.2s;
+    letter-spacing: 0.5px;
+    white-space: nowrap;
+  }
+  .btn:hover { border-color: var(--accent); color: var(--accent); }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: white; }
+  .btn.primary:hover { background: #6a4de8; }
+  .btn.danger { background: var(--red); border-color: var(--red); color: white; }
+  .btn.danger:hover { background: #e05555; }
+  .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+  .btn .dot { width:6px;height:6px;border-radius:50%;background:currentColor; }
+
+  /* ── MAIN GRID ── */
+  .main {
+    flex: 1;
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 0;
+    overflow: hidden;
+  }
+
+  .panel {
+    display: flex;
+    flex-direction: column;
+    border-right: 1px solid var(--border);
+    overflow: hidden;
+  }
+  .panel:last-child { border-right: none; }
+
+  .panel-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 16px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+  .panel-num {
+    font-family: 'Space Mono', monospace;
+    font-size: 9px;
+    font-weight: 700;
+    color: var(--muted);
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 2px 6px;
+    letter-spacing: 1px;
+  }
+  .panel-title {
+    font-size: 12px;
+    font-weight: 500;
+    flex: 1;
+  }
+  .panel-badge {
+    font-family: 'Space Mono', monospace;
+    font-size: 9px;
+    padding: 2px 8px;
+    border-radius: 10px;
+    border: 1px solid;
+  }
+  .panel-badge.jp { color: var(--yellow); border-color: var(--yellow); background: rgba(255,209,102,0.08); }
+  .panel-badge.ai { color: var(--accent); border-color: var(--accent); background: rgba(124,92,252,0.08); }
+  .panel-badge.zh { color: var(--green); border-color: var(--green); background: rgba(0,212,170,0.08); }
+
+  .panel-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 14px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    scroll-behavior: smooth;
+  }
+  .panel-body::-webkit-scrollbar { width: 4px; }
+  .panel-body::-webkit-scrollbar-track { background: transparent; }
+  .panel-body::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+  /* ── PANEL 1: STT ── */
+  .stt-entry {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 12px 14px;
+    animation: slideIn 0.3s ease;
+  }
+  .stt-entry.interim {
+    background: rgba(124,92,252,0.06);
+    border-color: rgba(124,92,252,0.3);
+  }
+  .stt-time {
+    font-family: 'Space Mono', monospace;
+    font-size: 9px;
+    color: var(--muted);
+    margin-bottom: 5px;
+  }
+  .stt-text {
+    font-family: 'Noto Sans JP', sans-serif;
+    font-size: 15px;
+    line-height: 1.7;
+    color: var(--text);
+    font-weight: 400;
+    letter-spacing: 0.3px;
+  }
+  .stt-entry.interim .stt-text { color: rgba(232,232,240,0.6); }
+
+  /* interim typing indicator */
+  .typing-indicator {
+    display: flex;
+    gap: 4px;
+    align-items: center;
+    padding: 8px 0 2px;
+  }
+  .typing-dot {
+    width: 5px; height: 5px;
+    border-radius: 50%;
+    background: var(--accent);
+    animation: bounce 1.2s infinite;
+  }
+  .typing-dot:nth-child(2) { animation-delay: 0.2s; }
+  .typing-dot:nth-child(3) { animation-delay: 0.4s; }
+  @keyframes bounce { 0%,80%,100%{transform:translateY(0)} 40%{transform:translateY(-5px)} }
+
+  /* ── PANEL 2: AI RESPONSE ── */
+  .ai-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px;
+    cursor: pointer;
+    transition: all 0.2s;
+    position: relative;
+    animation: slideIn 0.4s ease;
+  }
+  .ai-card:hover { border-color: var(--accent); background: rgba(124,92,252,0.06); }
+  .ai-card.speaking {
+    border-color: var(--accent2);
+    background: rgba(252,92,125,0.06);
+  }
+  .ai-card-meta {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+  }
+  .ai-card-tag {
+    font-family: 'Space Mono', monospace;
+    font-size: 9px;
+    padding: 2px 7px;
+    border-radius: 4px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+  }
+  .ai-card-tag.answer { background: rgba(124,92,252,0.2); color: var(--accent); }
+  .ai-card-tag.product { background: rgba(255,209,102,0.15); color: var(--yellow); }
+  .ai-card-tag.warm { background: rgba(0,212,170,0.15); color: var(--green); }
+  .ai-card-tag.thanks { background: rgba(252,92,125,0.15); color: var(--accent2); }
+  .ai-card-time {
+    font-family: 'Space Mono', monospace;
+    font-size: 9px;
+    color: var(--muted);
+    margin-left: auto;
+  }
+  .ai-card-text {
+    font-size: 14px;
+    line-height: 1.7;
+    color: var(--text);
+  }
+  .ai-card-speak {
+    position: absolute;
+    right: 10px;
+    bottom: 10px;
+    width: 26px; height: 26px;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    font-size: 13px;
+    opacity: 0;
+    transition: opacity 0.2s;
+  }
+  .ai-card:hover .ai-card-speak { opacity: 1; }
+  .ai-loading {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 14px;
+    background: var(--surface);
+    border: 1px solid rgba(124,92,252,0.3);
+    border-radius: 10px;
+    font-size: 12px;
+    color: var(--accent);
+    font-family: 'Space Mono', monospace;
+  }
+
+  /* ── PANEL 3: TRANSLATION ── */
+  .trans-entry {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 12px 14px;
+    animation: slideIn 0.5s ease;
+  }
+  .trans-jp {
+    font-family: 'Noto Sans JP', sans-serif;
+    font-size: 12px;
+    color: var(--muted);
+    margin-bottom: 8px;
+    line-height: 1.6;
+    border-left: 2px solid var(--border);
+    padding-left: 10px;
+  }
+  .trans-zh {
+    font-size: 14px;
+    line-height: 1.7;
+    color: var(--green);
+  }
+  .trans-label {
+    font-family: 'Space Mono', monospace;
+    font-size: 9px;
+    color: var(--muted);
+    margin-bottom: 4px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+  }
+
+  /* ── BOTTOM BAR ── */
+  .bottombar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 20px;
+    background: var(--surface);
+    border-top: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+  .volume-bar {
+    display: flex;
+    align-items: flex-end;
+    gap: 2px;
+    height: 20px;
+  }
+  .vol-bar {
+    width: 3px;
+    border-radius: 2px;
+    background: var(--border);
+    transition: height 0.1s, background 0.1s;
+  }
+  .vol-bar.active { background: var(--green); }
+  .info-text {
+    font-family: 'Space Mono', monospace;
+    font-size: 9px;
+    color: var(--muted);
+  }
+  .context-input {
+    flex: 1;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 6px 12px;
+    color: var(--text);
+    font-size: 12px;
+    outline: none;
+    font-family: inherit;
+  }
+  .context-input:focus { border-color: var(--accent); }
+  .context-input::placeholder { color: var(--muted); font-size: 11px; }
+
+  @keyframes slideIn {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  /* Empty state */
+  .empty-state {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    color: var(--muted);
+    text-align: center;
+    padding: 40px;
+  }
+  .empty-icon { font-size: 36px; opacity: 0.4; }
+  .empty-text { font-size: 12px; line-height: 1.6; max-width: 180px; }
+
+  /* TTS controls */
+  .tts-controls {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  select.voice-select {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 5px 8px;
+    color: var(--text);
+    font-family: 'Space Mono', monospace;
+    font-size: 9px;
+    outline: none;
+    cursor: pointer;
+  }
+
+  /* Clear btn */
+  .clear-btn {
+    font-family: 'Space Mono', monospace;
+    font-size: 9px;
+    color: var(--muted);
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 4px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+  }
+  .clear-btn:hover { color: var(--red); }
+
+  /* Speaking animation on card */
+  @keyframes speakPulse {
+    0%,100% { box-shadow: 0 0 0 0 rgba(252,92,125,0); }
+    50% { box-shadow: 0 0 0 6px rgba(252,92,125,0.2); }
+  }
+  .ai-card.speaking { animation: speakPulse 0.8s infinite; }
+</style>
+</head>
+<body>
+
+<!-- TOP BAR -->
+<div class="topbar">
+  <div class="app-title">Live Assistant</div>
+  <div class="status-dot" id="statusDot"></div>
+  <div class="status-text" id="statusText">未开始</div>
+  <div class="spacer"></div>
+  <div class="api-input-wrap">
+    <span class="api-label">API Key</span>
+    <input class="api-input" type="password" id="apiKeyInput" placeholder="sk-ant-... 或 sk-..." />
+  </div>
+  <div class="tts-controls">
+    <select class="voice-select" id="voiceSelect">
+      <option value="">自动选声音</option>
+    </select>
+  </div>
+  <button class="btn primary" id="startBtn" onclick="toggleListening()">
+    <div class="dot"></div> 开始监听
+  </button>
+  <button class="btn" id="testBtn" onclick="testWithSample()">测试</button>
+</div>
+
+<!-- MAIN PANELS -->
+<div class="main">
+
+  <!-- PANEL 1: STT -->
+  <div class="panel">
+    <div class="panel-header">
+      <div class="panel-num">01</div>
+      <div class="panel-title">主播语音 → 文字</div>
+      <span class="panel-badge jp">日文 STT</span>
+      <button class="clear-btn" onclick="clearPanel('stt')">清除</button>
+    </div>
+    <div class="panel-body" id="sttPanel">
+      <div class="empty-state" id="sttEmpty">
+        <div class="empty-icon">🎙️</div>
+        <div class="empty-text">点击"开始监听"后，主播说的日语会实时显示在这里</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- PANEL 2: AI Response -->
+  <div class="panel">
+    <div class="panel-header">
+      <div class="panel-num">02</div>
+      <div class="panel-title">AI 生成互动话术</div>
+      <span class="panel-badge ai">点击即可朗读</span>
+      <button class="clear-btn" onclick="clearPanel('ai')">清除</button>
+    </div>
+    <div class="panel-body" id="aiPanel">
+      <div class="empty-state" id="aiEmpty">
+        <div class="empty-icon">💬</div>
+        <div class="empty-text">AI 会根据主播说的话，自动生成你可以说的互动回应</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- PANEL 3: Translation -->
+  <div class="panel">
+    <div class="panel-header">
+      <div class="panel-num">03</div>
+      <div class="panel-title">中文翻译</div>
+      <span class="panel-badge zh">日语 → 中文</span>
+      <button class="clear-btn" onclick="clearPanel('trans')">清除</button>
+    </div>
+    <div class="panel-body" id="transPanel">
+      <div class="empty-state" id="transEmpty">
+        <div class="empty-icon">🌐</div>
+        <div class="empty-text">主播说的日语和 AI 建议的话，都会翻译成中文显示在这里</div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- BOTTOM BAR -->
+<div class="bottombar">
+  <div class="volume-bar" id="volumeBar">
+    <div class="vol-bar" style="height:6px"></div>
+    <div class="vol-bar" style="height:10px"></div>
+    <div class="vol-bar" style="height:8px"></div>
+    <div class="vol-bar" style="height:14px"></div>
+    <div class="vol-bar" style="height:6px"></div>
+    <div class="vol-bar" style="height:10px"></div>
+    <div class="vol-bar" style="height:8px"></div>
+  </div>
+  <div class="info-text" id="langInfo">语言: 日语 (ja-JP)</div>
+  <input class="context-input" id="contextInput"
+    placeholder="直播场景备注（可选）：如 美妆直播 / 卖护肤品 / 今天主推XX产品…" />
+  <span class="info-text" id="entryCount">0 条记录</span>
+</div>
+
+<script>
+// ── STATE ──
+let recognition = null;
+let isListening = false;
+let currentInterimEl = null;
+let apiKey = '';
+let aiQueue = [];
+let isProcessing = false;
+let isSpeaking = false;
+let currentSpeakCard = null;
+let entryCount = 0;
+
+// ── INIT VOICES ──
+function initVoices() {
+  const sel = document.getElementById('voiceSelect');
+  const voices = speechSynthesis.getVoices();
+  const jaVoices = voices.filter(v => v.lang.startsWith('ja'));
+  jaVoices.forEach(v => {
+    const opt = document.createElement('option');
+    opt.value = v.name;
+    opt.textContent = v.name.replace('Google ', '').replace('Microsoft ', '');
+    sel.appendChild(opt);
+  });
+}
+speechSynthesis.onvoiceschanged = initVoices;
+window.addEventListener('load', () => { setTimeout(initVoices, 500); });
+
+// ── SPEECH RECOGNITION ──
+function toggleListening() {
+  if (isListening) {
+    stopListening();
+  } else {
+    startListening();
+  }
+}
+
+function startListening() {
+  const key = document.getElementById('apiKeyInput').value.trim();
+  if (!key) {
+    alert('请先输入 API Key（Anthropic 或 OpenAI 均可）');
+    return;
+  }
+  apiKey = key;
+
+  if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+    alert('您的浏览器不支持语音识别，请使用 Chrome 浏览器');
+    return;
+  }
+
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  recognition = new SpeechRecognition();
+  recognition.lang = 'ja-JP';
+  recognition.continuous = true;
+  recognition.interimResults = true;
+  recognition.maxAlternatives = 1;
+
+  recognition.onstart = () => {
+    isListening = true;
+    updateStatus('listening');
+    document.getElementById('startBtn').textContent = '⏹ 停止监听';
+    document.getElementById('startBtn').className = 'btn danger';
+  };
+
+  recognition.onresult = (event) => {
+    let interim = '';
+    let finalText = '';
+
+    for (let i = event.resultIndex; i < event.results.length; i++) {
+      const t = event.results[i][0].transcript;
+      if (event.results[i].isFinal) {
+        finalText += t;
+      } else {
+        interim += t;
+      }
+    }
+
+    if (interim) showInterim(interim);
+    if (finalText) {
+      removeInterim();
+      addSTTEntry(finalText.trim());
+      triggerAI(finalText.trim());
+    }
+  };
+
+  recognition.onerror = (e) => {
+    if (e.error !== 'no-speech') {
+      console.error('STT error:', e.error);
+      updateStatus('error');
+    }
+  };
+
+  recognition.onend = () => {
+    if (isListening) {
+      // auto restart
+      setTimeout(() => { if (isListening) recognition.start(); }, 500);
+    }
+  };
+
+  recognition.start();
+  document.getElementById('sttEmpty').style.display = 'none';
+  document.getElementById('aiEmpty').style.display = 'none';
+  document.getElementById('transEmpty').style.display = 'none';
+}
+
+function stopListening() {
+  isListening = false;
+  if (recognition) { recognition.stop(); recognition = null; }
+  updateStatus('stopped');
+  document.getElementById('startBtn').innerHTML = '<div class="dot"></div> 开始监听';
+  document.getElementById('startBtn').className = 'btn primary';
+  removeInterim();
+}
+
+// ── STATUS ──
+function updateStatus(state) {
+  const dot = document.getElementById('statusDot');
+  const txt = document.getElementById('statusText');
+  dot.className = 'status-dot';
+  if (state === 'listening') {
+    dot.classList.add('recording');
+    txt.textContent = '监听中...';
+    txt.style.color = '#ff6b6b';
+  } else if (state === 'processing') {
+    dot.classList.add('active');
+    txt.textContent = 'AI处理中';
+    txt.style.color = '#7c5cfc';
+  } else if (state === 'stopped') {
+    txt.textContent = '已停止';
+    txt.style.color = '#666680';
+  } else if (state === 'error') {
+    txt.textContent = '错误';
+    txt.style.color = '#ff6b6b';
+  } else {
+    txt.textContent = '未开始';
+    txt.style.color = '#666680';
+  }
+}
+
+// ── STT ENTRIES ──
+function showInterim(text) {
+  removeInterim();
+  const panel = document.getElementById('sttPanel');
+  const el = document.createElement('div');
+  el.className = 'stt-entry interim';
+  el.id = 'interimEntry';
+  el.innerHTML = `
+    <div class="stt-time">🎙️ 识别中...</div>
+    <div class="stt-text">${text}</div>
+    <div class="typing-indicator">
+      <div class="typing-dot"></div>
+      <div class="typing-dot"></div>
+      <div class="typing-dot"></div>
+    </div>`;
+  panel.appendChild(el);
+  panel.scrollTop = panel.scrollHeight;
+}
+
+function removeInterim() {
+  const el = document.getElementById('interimEntry');
+  if (el) el.remove();
+}
+
+function addSTTEntry(text) {
+  const panel = document.getElementById('sttPanel');
+  const el = document.createElement('div');
+  el.className = 'stt-entry';
+  const now = new Date().toLocaleTimeString('zh-CN', { hour:'2-digit', minute:'2-digit', second:'2-digit' });
+  el.innerHTML = `<div class="stt-time">${now}</div><div class="stt-text">${escHtml(text)}</div>`;
+  panel.appendChild(el);
+  panel.scrollTop = panel.scrollHeight;
+  entryCount++;
+  document.getElementById('entryCount').textContent = `${entryCount} 条记录`;
+  animateVolume();
+}
+
+// ── AI PROCESSING ──
+async function triggerAI(japaneseText) {
+  if (!apiKey) return;
+  aiQueue.push(japaneseText);
+  if (!isProcessing) processQueue();
+}
+
+async function processQueue() {
+  if (aiQueue.length === 0) { isProcessing = false; return; }
+  isProcessing = true;
+  updateStatus('processing');
+
+  const text = aiQueue.shift();
+  const context = document.getElementById('contextInput').value.trim();
+
+  // Show loading
+  const aiPanel = document.getElementById('aiPanel');
+  const loadEl = document.createElement('div');
+  loadEl.className = 'ai-loading';
+  loadEl.id = 'aiLoading';
+  loadEl.innerHTML = `<div class="typing-dot" style="background:var(--accent)"></div><div class="typing-dot" style="background:var(--accent);animation-delay:0.2s"></div><div class="typing-dot" style="background:var(--accent);animation-delay:0.4s"></div> <span>AI生成中...</span>`;
+  aiPanel.appendChild(loadEl);
+  aiPanel.scrollTop = aiPanel.scrollHeight;
+
+  try {
+    const systemPrompt = `あなたは日本語のライブ配信に参加している中国人アシスタントです。
+配信者の日本語を聞いて、視聴者として自然に反応・コメントする短い日本語のフレーズを生成してください。
+
+ルール：
+- 必ず日本語で回答
+- 1〜2文、最大40文字以内
+- 視聴者として自然な相槌・質問・共感のコメント
+- 必ず response_type を含むJSON形式で返す
+- response_type は: "answer"（質問への回答）/ "product"（商品に関連）/ "warm"（雰囲気を盛り上げる）/ "thanks"（感謝・共感）
+${context ? `配信の背景: ${context}` : ''}
+
+必ず以下のJSONのみを返す（他のテキスト不要）:
+{"text": "日本語のコメント", "response_type": "タイプ", "translation": "中文翻訳"}`;
+
+    let result;
+    if (apiKey.startsWith('sk-ant')) {
+      // Anthropic API
+      const resp = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': apiKey,
+          'anthropic-version': '2023-06-01'
+        },
+        body: JSON.stringify({
+          model: 'claude-haiku-4-5-20251001',
+          max_tokens: 200,
+          system: systemPrompt,
+          messages: [{ role: 'user', content: `配信者が言った言葉: 「${text}」` }]
+        })
+      });
+      const data = await resp.json();
+      result = data.content?.[0]?.text || '';
+    } else {
+      // OpenAI API
+      const resp = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+        body: JSON.stringify({
+          model: 'gpt-4o-mini',
+          max_tokens: 200,
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: `配信者が言った言葉: 「${text}」` }
+          ]
+        })
+      });
+      const data = await resp.json();
+      result = data.choices?.[0]?.message?.content || '';
+    }
+
+    // Parse JSON
+    const cleaned = result.replace(/```json|```/g, '').trim();
+    const parsed = JSON.parse(cleaned);
+
+    loadEl.remove();
+    addAICard(parsed.text, parsed.response_type || 'answer', parsed.translation, text);
+    addTransEntry(text, parsed.text, parsed.translation);
+
+  } catch (err) {
+    console.error(err);
+    loadEl.remove();
+    if (aiQueue.length === 0) updateStatus(isListening ? 'listening' : 'stopped');
+  }
+
+  if (isListening) updateStatus('listening');
+  setTimeout(() => processQueue(), 300);
+}
+
+// ── AI CARDS ──
+function addAICard(text, type, translation, sourceText) {
+  const panel = document.getElementById('aiPanel');
+  const el = document.createElement('div');
+  el.className = 'ai-card';
+  const now = new Date().toLocaleTimeString('zh-CN', { hour:'2-digit', minute:'2-digit', second:'2-digit' });
+  const tagLabels = { answer:'回答', product:'商品', warm:'暖场', thanks:'感谢' };
+  el.innerHTML = `
+    <div class="ai-card-meta">
+      <span class="ai-card-tag ${type}">${tagLabels[type] || type}</span>
+      <span class="ai-card-time">${now}</span>
+    </div>
+    <div class="ai-card-text">${escHtml(text)}</div>
+    <div class="ai-card-speak">🔊</div>`;
+  el.onclick = () => speakText(text, el);
+  panel.appendChild(el);
+  panel.scrollTop = panel.scrollHeight;
+}
+
+// ── TRANSLATION PANEL ──
+function addTransEntry(jpText, aiText, aiTranslation) {
+  const panel = document.getElementById('transPanel');
+  const el = document.createElement('div');
+  el.className = 'trans-entry';
+  el.innerHTML = `
+    <div class="trans-label">主播说</div>
+    <div class="trans-jp">${escHtml(jpText)}</div>
+    <div class="trans-label" style="margin-top:10px">AI建议（中文）</div>
+    <div class="trans-zh">${escHtml(aiTranslation || '')}</div>`;
+  panel.appendChild(el);
+  panel.scrollTop = panel.scrollHeight;
+}
+
+// ── TTS ──
+function speakText(text, cardEl) {
+  if (isSpeaking) { speechSynthesis.cancel(); }
+
+  if (currentSpeakCard) currentSpeakCard.classList.remove('speaking');
+  currentSpeakCard = cardEl;
+  cardEl.classList.add('speaking');
+
+  const utter = new SpeechSynthesisUtterance(text);
+  utter.lang = 'ja-JP';
+  utter.rate = 0.95;
+  utter.pitch = 1.05;
+
+  const voiceName = document.getElementById('voiceSelect').value;
+  if (voiceName) {
+    const voices = speechSynthesis.getVoices();
+    const v = voices.find(v => v.name === voiceName);
+    if (v) utter.voice = v;
+  }
+
+  isSpeaking = true;
+  utter.onend = () => {
+    isSpeaking = false;
+    cardEl.classList.remove('speaking');
+    currentSpeakCard = null;
+  };
+  utter.onerror = () => {
+    isSpeaking = false;
+    cardEl.classList.remove('speaking');
+    currentSpeakCard = null;
+  };
+  speechSynthesis.speak(utter);
+}
+
+// ── UTILS ──
+function escHtml(t) {
+  return t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function clearPanel(panel) {
+  const ids = { stt: 'sttPanel', ai: 'aiPanel', trans: 'transPanel' };
+  const emptyIds = { stt: 'sttEmpty', ai: 'aiEmpty', trans: 'transEmpty' };
+  const p = document.getElementById(ids[panel]);
+  // keep empty state
+  const empties = p.querySelectorAll('.empty-state');
+  p.innerHTML = '';
+  empties.forEach(e => p.appendChild(e));
+  if (panel === 'stt') { entryCount = 0; document.getElementById('entryCount').textContent = '0 条记录'; }
+}
+
+function animateVolume() {
+  const bars = document.querySelectorAll('.vol-bar');
+  bars.forEach(b => {
+    b.classList.add('active');
+    b.style.height = Math.random() * 18 + 4 + 'px';
+  });
+  setTimeout(() => {
+    bars.forEach(b => {
+      b.classList.remove('active');
+      b.style.height = '6px';
+    });
+  }, 400);
+}
+
+// ── TEST MODE ──
+const testSamples = [
+  'こんにちは！今日はすごく特別なアイテムをご紹介します！',
+  'このファンデーションは本当に肌に優しくて、カバー力も抜群なんですよ！',
+  'お肌が敏感な方にも安心して使えるように作られています',
+  '今日は特別価格でご提供していますので、ぜひチェックしてみてください！',
+  'ありがとうございます！皆さんのご支持に感謝しています！',
+];
+let testIdx = 0;
+function testWithSample() {
+  const text = testSamples[testIdx % testSamples.length];
+  testIdx++;
+  document.getElementById('sttEmpty').style.display = 'none';
+  document.getElementById('aiEmpty').style.display = 'none';
+  document.getElementById('transEmpty').style.display = 'none';
+  addSTTEntry(text);
+
+  const key = document.getElementById('apiKeyInput').value.trim();
+  if (key) {
+    apiKey = key;
+    triggerAI(text);
+  } else {
+    // Mock response without API
+    setTimeout(() => {
+      const mockCards = [
+        { text: 'すごいですね！もっと詳しく教えてください！', type: 'warm', translation: '太棒了！请告诉我更多详情！' },
+        { text: 'お肌に優しいのはとても嬉しいです！', type: 'answer', translation: '对皮肤温和真的太好了！' },
+        { text: '価格はいくらですか？', type: 'product', translation: '价格是多少呢？' },
+      ];
+      const mock = mockCards[Math.floor(Math.random() * mockCards.length)];
+      addAICard(mock.text, mock.type, mock.translation, text);
+      addTransEntry(text, mock.text, mock.translation);
+    }, 800);
+  }
+}
+
+// Load API key from storage if available
+try {
+  const saved = localStorage.getItem('la_apikey');
+  if (saved) document.getElementById('apiKeyInput').value = saved;
+} catch(e){}
+
+document.getElementById('apiKeyInput').addEventListener('change', function() {
+  try { localStorage.setItem('la_apikey', this.value); } catch(e){}
+});
+</script>
+</body>
+</html>
