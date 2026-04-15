@@ -1,0 +1,1807 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>直播实时助手</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Noto+Sans+JP:wght@300;400;500;700&family=Noto+Sans+SC:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0d0d0f;
+    --surface: #16161a;
+    --surface2: #1e1e24;
+    --border: #2a2a35;
+    --accent: #7c5cfc;
+    --accent2: #fc5c7d;
+    --green: #00d4aa;
+    --yellow: #ffd166;
+    --text: #e8e8f0;
+    --muted: #666680;
+    --red: #ff6b6b;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'Noto Sans SC', 'Noto Sans JP', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    user-select: none;
+  }
+
+  /* ── TOP BAR ── */
+  .topbar {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 10px 20px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+  .app-title {
+    font-family: 'Space Mono', monospace;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 2px;
+    color: var(--accent);
+    text-transform: uppercase;
+  }
+  .status-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--muted);
+    transition: background 0.3s;
+    flex-shrink: 0;
+  }
+  .status-dot.active { background: var(--green); box-shadow: 0 0 8px var(--green); animation: pulse 1.5s infinite; }
+  .status-dot.recording { background: var(--red); box-shadow: 0 0 8px var(--red); animation: pulse 0.8s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+
+  .status-text {
+    font-family: 'Space Mono', monospace;
+    font-size: 10px;
+    color: var(--muted);
+  }
+
+  .spacer { flex: 1; }
+
+  /* API KEY input */
+  .api-input-wrap {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .api-label {
+    font-family: 'Space Mono', monospace;
+    font-size: 9px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+  }
+  .api-input {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 5px 10px;
+    color: var(--text);
+    font-family: 'Space Mono', monospace;
+    font-size: 10px;
+    width: 200px;
+    outline: none;
+  }
+  .api-input:focus { border-color: var(--accent); }
+
+  /* Control buttons */
+  .btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 7px 14px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--surface2);
+    color: var(--text);
+    font-family: 'Space Mono', monospace;
+    font-size: 10px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.2s;
+    letter-spacing: 0.5px;
+    white-space: nowrap;
+  }
+  .btn:hover { border-color: var(--accent); color: var(--accent); }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: white; }
+  .btn.primary:hover { background: #6a4de8; }
+  .btn.danger { background: var(--red); border-color: var(--red); color: white; }
+  .btn.danger:hover { background: #e05555; }
+  .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+  .btn .dot { width:6px;height:6px;border-radius:50%;background:currentColor; }
+
+  /* ── MAIN GRID ── */
+  .main {
+    flex: 1;
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 0;
+    overflow: hidden;
+  }
+
+  .panel {
+    display: flex;
+    flex-direction: column;
+    border-right: 1px solid var(--border);
+    overflow: hidden;
+  }
+  .panel:last-child { border-right: none; }
+
+  .panel-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 16px;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+  .panel-num {
+    font-family: 'Space Mono', monospace;
+    font-size: 9px;
+    font-weight: 700;
+    color: var(--muted);
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 2px 6px;
+    letter-spacing: 1px;
+  }
+  .panel-title {
+    font-size: 12px;
+    font-weight: 500;
+    flex: 1;
+  }
+  .panel-badge {
+    font-family: 'Space Mono', monospace;
+    font-size: 9px;
+    padding: 2px 8px;
+    border-radius: 10px;
+    border: 1px solid;
+  }
+  .panel-badge.jp { color: var(--yellow); border-color: var(--yellow); background: rgba(255,209,102,0.08); }
+  .panel-badge.ai { color: var(--accent); border-color: var(--accent); background: rgba(124,92,252,0.08); }
+  .panel-badge.zh { color: var(--green); border-color: var(--green); background: rgba(0,212,170,0.08); }
+
+  .panel-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 14px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    scroll-behavior: smooth;
+  }
+  .panel-body::-webkit-scrollbar { width: 4px; }
+  .panel-body::-webkit-scrollbar-track { background: transparent; }
+  .panel-body::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+  /* ── PANEL 1: STT ── */
+  .stt-entry {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 12px 14px;
+    animation: slideIn 0.3s ease;
+  }
+  .stt-entry.interim {
+    background: rgba(124,92,252,0.06);
+    border-color: rgba(124,92,252,0.3);
+  }
+  .stt-time {
+    font-family: 'Space Mono', monospace;
+    font-size: 9px;
+    color: var(--muted);
+    margin-bottom: 5px;
+  }
+  .stt-text {
+    font-family: 'Noto Sans JP', sans-serif;
+    font-size: 15px;
+    line-height: 1.7;
+    color: var(--text);
+    font-weight: 400;
+    letter-spacing: 0.3px;
+  }
+  .stt-entry.interim .stt-text { color: rgba(232,232,240,0.6); }
+
+  /* interim typing indicator */
+  .typing-indicator {
+    display: flex;
+    gap: 4px;
+    align-items: center;
+    padding: 8px 0 2px;
+  }
+  .typing-dot {
+    width: 5px; height: 5px;
+    border-radius: 50%;
+    background: var(--accent);
+    animation: bounce 1.2s infinite;
+  }
+  .typing-dot:nth-child(2) { animation-delay: 0.2s; }
+  .typing-dot:nth-child(3) { animation-delay: 0.4s; }
+  @keyframes bounce { 0%,80%,100%{transform:translateY(0)} 40%{transform:translateY(-5px)} }
+
+  /* ── PANEL 2: AI RESPONSE ── */
+  .ai-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px;
+    cursor: pointer;
+    transition: all 0.2s;
+    position: relative;
+    animation: slideIn 0.4s ease;
+  }
+  .ai-card:hover { border-color: var(--accent); background: rgba(124,92,252,0.06); }
+  .ai-card.speaking {
+    border-color: var(--accent2);
+    background: rgba(252,92,125,0.06);
+  }
+  .ai-card-meta {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+  }
+  .ai-card-tag {
+    font-family: 'Space Mono', monospace;
+    font-size: 9px;
+    padding: 2px 7px;
+    border-radius: 4px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+  }
+  .ai-card-tag.answer { background: rgba(124,92,252,0.2); color: var(--accent); }
+  .ai-card-tag.product { background: rgba(255,209,102,0.15); color: var(--yellow); }
+  .ai-card-tag.warm { background: rgba(0,212,170,0.15); color: var(--green); }
+  .ai-card-tag.thanks { background: rgba(252,92,125,0.15); color: var(--accent2); }
+  .ai-card-time {
+    font-family: 'Space Mono', monospace;
+    font-size: 9px;
+    color: var(--muted);
+    margin-left: auto;
+  }
+  .ai-card-text {
+    font-size: 14px;
+    line-height: 1.7;
+    color: var(--text);
+  }
+  .ai-card-speak {
+    position: absolute;
+    right: 10px;
+    bottom: 10px;
+    width: 26px; height: 26px;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    font-size: 13px;
+    opacity: 0;
+    transition: opacity 0.2s;
+  }
+  .ai-card:hover .ai-card-speak { opacity: 1; }
+  .ai-loading {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 14px;
+    background: var(--surface);
+    border: 1px solid rgba(124,92,252,0.3);
+    border-radius: 10px;
+    font-size: 12px;
+    color: var(--accent);
+    font-family: 'Space Mono', monospace;
+  }
+
+  /* ── PANEL 3: TRANSLATION ── */
+  .trans-entry {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 12px 14px;
+    animation: slideIn 0.5s ease;
+  }
+  .trans-jp {
+    font-family: 'Noto Sans JP', sans-serif;
+    font-size: 12px;
+    color: var(--muted);
+    margin-bottom: 8px;
+    line-height: 1.6;
+    border-left: 2px solid var(--border);
+    padding-left: 10px;
+  }
+  .trans-host {
+    font-size: 13px;
+    line-height: 1.6;
+    color: var(--yellow);
+    padding-left: 6px;
+    border-left: 2px solid var(--yellow);
+    margin-bottom: 4px;
+    opacity: 0.9;
+  }
+  .trans-zh {
+    font-size: 14px;
+    line-height: 1.7;
+    color: var(--green);
+  }
+  .trans-label {
+    font-family: 'Space Mono', monospace;
+    font-size: 9px;
+    color: var(--muted);
+    margin-bottom: 4px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+  }
+
+  /* ── BOTTOM BAR ── */
+  .bottombar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 20px;
+    background: var(--surface);
+    border-top: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+  .volume-bar {
+    display: flex;
+    align-items: flex-end;
+    gap: 2px;
+    height: 20px;
+  }
+  .vol-bar {
+    width: 3px;
+    border-radius: 2px;
+    background: var(--border);
+    transition: height 0.1s, background 0.1s;
+  }
+  .vol-bar.active { background: var(--green); }
+  .info-text {
+    font-family: 'Space Mono', monospace;
+    font-size: 9px;
+    color: var(--muted);
+  }
+  .context-input {
+    flex: 1;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 6px 12px;
+    color: var(--text);
+    font-size: 12px;
+    outline: none;
+    font-family: inherit;
+  }
+  .context-input:focus { border-color: var(--accent); }
+  .context-input::placeholder { color: var(--muted); font-size: 11px; }
+
+  @keyframes slideIn {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  /* Empty state */
+  .empty-state {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    color: var(--muted);
+    text-align: center;
+    padding: 40px;
+  }
+  .empty-icon { font-size: 36px; opacity: 0.4; }
+  .empty-text { font-size: 12px; line-height: 1.6; max-width: 180px; }
+
+  /* TTS controls */
+  .tts-controls {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  select.voice-select {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 5px 8px;
+    color: var(--text);
+    font-family: 'Space Mono', monospace;
+    font-size: 9px;
+    outline: none;
+    cursor: pointer;
+  }
+
+  /* Clear btn */
+  .clear-btn {
+    font-family: 'Space Mono', monospace;
+    font-size: 9px;
+    color: var(--muted);
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 4px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+  }
+  .clear-btn:hover { color: var(--red); }
+
+  /* Speaking animation on card */
+  @keyframes speakPulse {
+    0%,100% { box-shadow: 0 0 0 0 rgba(252,92,125,0); }
+    50% { box-shadow: 0 0 0 6px rgba(252,92,125,0.2); }
+  }
+  .ai-card.speaking { animation: speakPulse 0.8s infinite; }
+
+  /* Stream cursor */
+  .stream-cursor {
+    display: inline-block;
+    color: var(--accent);
+    animation: blink 0.7s infinite;
+    font-size: 12px;
+    vertical-align: middle;
+  }
+  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0} }
+
+  /* Archive list items */
+  .archive-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 16px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    margin-bottom: 8px;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .archive-item:hover { border-color: var(--accent); background: rgba(124,92,252,0.06); }
+  .archive-item-info { flex: 1; }
+  .archive-item-date { font-family: 'Space Mono', monospace; font-size: 11px; color: var(--text); margin-bottom: 4px; }
+  .archive-item-ctx { font-size: 12px; color: var(--muted); }
+  .archive-item-right { display: flex; align-items: center; gap: 10px; }
+  .archive-item-count { font-family: 'Space Mono', monospace; font-size: 10px; color: var(--accent); background: rgba(124,92,252,0.12); padding: 3px 10px; border-radius: 10px; }
+  .archive-delete-btn { background: none; border: 1px solid var(--border); color: var(--muted); border-radius: 6px; padding: 3px 8px; cursor: pointer; font-size: 11px; transition: all 0.2s; }
+  .archive-delete-btn:hover { border-color: var(--red); color: var(--red); }
+  .archive-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 60px 0; }
+
+  /* ── CAT AVATAR ── */
+  #catWrap {
+    position: fixed;
+    bottom: 10px;
+    right: 16px;
+    z-index: 500;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+  }
+  #catAvatar {
+    width: 100px;
+    height: 140px;
+    cursor: pointer;
+    filter: drop-shadow(0 6px 20px rgba(124,92,252,0.3)) drop-shadow(0 2px 8px rgba(0,0,0,0.4));
+    transition: transform 0.2s;
+    user-select: none;
+  }
+  #catAvatar:hover { transform: scale(1.06) translateY(-3px); }
+  #catAvatar.talking { animation: catBounce 0.3s infinite alternate; }
+  #catAvatar.excited { animation: catJump 0.6s ease; }
+  @keyframes catBounce { from{transform:translateY(0) rotate(-2deg)} to{transform:translateY(-8px) rotate(2deg)} }
+  @keyframes catJump { 0%{transform:translateY(0)} 30%{transform:translateY(-18px) scale(1.05)} 60%{transform:translateY(-10px) scale(1.08)} 80%{transform:translateY(-20px) rotate(-5deg)} 100%{transform:translateY(0) rotate(0)} }
+
+  /* Character switcher bar */
+  #catSwitcher {
+    display: flex;
+    gap: 5px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 4px 8px;
+  }
+  .cat-opt {
+    width: 22px; height: 22px;
+    border-radius: 50%;
+    border: 2px solid transparent;
+    cursor: pointer;
+    font-size: 12px;
+    display: flex; align-items: center; justify-content: center;
+    transition: all 0.18s;
+    background: var(--surface2);
+  }
+  .cat-opt:hover { transform: scale(1.2); }
+  .cat-opt.active { border-color: var(--accent); background: rgba(124,92,252,0.2); }
+
+  #catBubble {
+    position: fixed;
+    bottom: 165px;
+    right: 16px;
+    background: var(--surface);
+    border: 1.5px solid var(--accent);
+    border-radius: 14px 14px 4px 14px;
+    padding: 8px 12px;
+    font-size: 12px;
+    color: var(--text);
+    max-width: 200px;
+    z-index: 501;
+    opacity: 0;
+    transform: translateY(8px);
+    transition: opacity 0.3s, transform 0.3s;
+    pointer-events: none;
+    line-height: 1.6;
+  }
+  #catBubble.show { opacity: 1; transform: translateY(0); }
+</style>
+</head>
+<body>
+
+<!-- TOP BAR -->
+<div class="topbar">
+  <div class="app-title">Live Assistant</div>
+  <div class="status-dot" id="statusDot"></div>
+  <div class="status-text" id="statusText">未开始</div>
+  <div class="spacer"></div>
+  <div class="api-input-wrap">
+    <span class="api-label">API Key</span>
+    <input class="api-input" type="password" id="apiKeyInput" placeholder="sk-ant-... 或 sk-..." />
+  </div>
+  <div class="tts-controls">
+    <span id="vvStatus" style="font-family:monospace;font-size:9px;color:#666680;white-space:nowrap;">⚫ VOICEVOX</span>
+    <select class="voice-select" id="voiceSelect" onchange="onVoiceChange(this.value)" style="max-width:160px;">
+      <option value="">检测中...</option>
+    </select>
+  </div>
+  <button class="btn primary" id="startBtn" onclick="toggleListening()">
+    <div class="dot"></div> 开始监听
+  </button>
+  <button class="btn" id="testBtn" onclick="testWithSample()">测试</button>
+  <button class="btn" id="autoPlayBtn" onclick="toggleAutoPlay()">🎙️ 实时回复</button>
+  <button class="btn" id="archiveBtn" onclick="archiveSession()" title="归档本次直播记录">
+    📦 归档
+  </button>
+  <button class="btn" id="historyBtn" onclick="openArchiveModal()" style="position:relative;">
+    🗂 历史
+    <span id="archiveBadge" style="display:none;position:absolute;top:-6px;right:-6px;background:var(--accent2);color:white;border-radius:10px;font-size:9px;padding:1px 5px;min-width:16px;text-align:center;"></span>
+  </button>
+</div>
+
+<!-- MAIN PANELS -->
+<div class="main">
+
+  <!-- PANEL 1: STT -->
+  <div class="panel">
+    <div class="panel-header">
+      <div class="panel-num">01</div>
+      <div class="panel-title">主播语音 → 文字</div>
+      <span class="panel-badge jp">日文 STT</span>
+      <button class="clear-btn" onclick="clearPanel('stt')">清除</button>
+    </div>
+    <div class="panel-body" id="sttPanel">
+      <div class="empty-state" id="sttEmpty">
+        <div class="empty-icon">🎙️</div>
+        <div class="empty-text">点击"开始监听"后，主播说的日语会实时显示在这里</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- PANEL 2: AI Response -->
+  <div class="panel">
+    <div class="panel-header">
+      <div class="panel-num">02</div>
+      <div class="panel-title">AI 生成互动话术</div>
+      <span class="panel-badge ai">点击即可朗读</span>
+      <button class="clear-btn" onclick="clearPanel('ai')">清除</button>
+    </div>
+    <div class="panel-body" id="aiPanel">
+      <div class="empty-state" id="aiEmpty">
+        <div class="empty-icon">💬</div>
+        <div class="empty-text">AI 会根据主播说的话，自动生成你可以说的互动回应</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- PANEL 3: Translation -->
+  <div class="panel">
+    <div class="panel-header">
+      <div class="panel-num">03</div>
+      <div class="panel-title">中文翻译</div>
+      <span class="panel-badge zh">日语 → 中文</span>
+      <button class="clear-btn" onclick="clearPanel('trans')">清除</button>
+    </div>
+    <div class="panel-body" id="transPanel">
+      <div class="empty-state" id="transEmpty">
+        <div class="empty-icon">🌐</div>
+        <div class="empty-text">主播说的日语和 AI 建议的话，都会翻译成中文显示在这里</div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- BOTTOM BAR -->
+<div class="bottombar">
+  <div class="volume-bar" id="volumeBar">
+    <div class="vol-bar" style="height:6px"></div>
+    <div class="vol-bar" style="height:10px"></div>
+    <div class="vol-bar" style="height:8px"></div>
+    <div class="vol-bar" style="height:14px"></div>
+    <div class="vol-bar" style="height:6px"></div>
+    <div class="vol-bar" style="height:10px"></div>
+    <div class="vol-bar" style="height:8px"></div>
+  </div>
+  <div class="info-text" id="langInfo">语言: 日语 (ja-JP)</div>
+  <input class="context-input" id="contextInput"
+    placeholder="直播场景备注（可选）：如 美妆直播 / 卖护肤品 / 今天主推XX产品…" />
+  <span class="info-text" id="entryCount">0 条记录</span>
+</div>
+
+<script>
+// ── STATE ──
+let recognition = null;
+let isListening = false;
+let currentInterimEl = null;
+let apiKey = '';
+let isSpeaking = false;
+let currentSpeakCard = null;
+let entryCount = 0;
+let autoPlay = false;
+let speakQueue = [];
+let isSpeakingQueue = false;
+// Archive state
+let archives = [];
+try { archives = JSON.parse(localStorage.getItem('la_archives') || '[]'); } catch(e){ archives = []; }
+
+// ── INIT VOICES ──
+// VOICEVOX character list (speaker ID → name)
+const VV_SPEAKERS = [
+  { id: 3,  label: '🟢 ずんだもん',     style: 'ノーマル' },
+  { id: 1,  label: '🌸 四国めたん',     style: 'ノーマル' },
+  { id: 8,  label: '🧡 春日部つむぎ',   style: 'ノーマル' },
+  { id: 10, label: '💙 雨晴はう',       style: 'ノーマル' },
+  { id: 13, label: '💜 冥鳴ひまり',     style: 'ノーマル' },
+  { id: 14, label: '🔴 冥鳴ひまり',     style: '囁き' },
+  { id: 2,  label: '🌸 四国めたん',     style: 'あまあま' },
+  { id: 0,  label: '💚 四国めたん',     style: 'ツンツン' },
+  { id: 37, label: '🌙 小夜/SAYO',      style: 'ノーマル' },
+  { id: 58, label: '⭐ 栗田まろん',     style: 'ノーマル' },
+  { id: 47, label: '🤖 ナースロボ',     style: 'ノーマル' },
+];
+
+let vvSpeakerId = 3; // default: ずんだもん
+let vvOnline = false;
+
+async function checkVoicevox() {
+  try {
+    const r = await fetch('http://localhost:50021/speakers', { signal: AbortSignal.timeout(1500) });
+    if (r.ok) {
+      vvOnline = true;
+      buildVVSelect();
+      document.getElementById('vvStatus').textContent = '🟢 VOICEVOX';
+      document.getElementById('vvStatus').style.color = '#00d4aa';
+    }
+  } catch(e) {
+    vvOnline = false;
+    document.getElementById('vvStatus').textContent = '⚫ VOICEVOX离线';
+    document.getElementById('vvStatus').style.color = '#666680';
+    // Fallback: populate with system voices
+    initSystemVoices();
+  }
+}
+
+function buildVVSelect() {
+  const sel = document.getElementById('voiceSelect');
+  sel.innerHTML = '';
+  VV_SPEAKERS.forEach(sp => {
+    const opt = document.createElement('option');
+    opt.value = 'vv_' + sp.id;
+    opt.textContent = sp.label + ' · ' + sp.style;
+    sel.appendChild(opt);
+  });
+  sel.value = 'vv_3';
+  vvSpeakerId = 3;
+}
+
+function initSystemVoices() {
+  const sel = document.getElementById('voiceSelect');
+  sel.innerHTML = '<option value="">系统声音(备用)</option>';
+  const voices = speechSynthesis.getVoices();
+  voices.filter(v => v.lang.startsWith('ja')).forEach(v => {
+    const opt = document.createElement('option');
+    opt.value = v.name;
+    opt.textContent = '🔊 ' + v.name.replace('Microsoft ','').replace('Google ','');
+    sel.appendChild(opt);
+  });
+}
+
+function initVoices() {
+  checkVoicevox();
+}
+
+speechSynthesis.onvoiceschanged = () => { if (!vvOnline) initSystemVoices(); };
+window.addEventListener('load', () => { setTimeout(initVoices, 600); });
+
+function onVoiceChange(val) {
+  if (val.startsWith('vv_')) {
+    vvSpeakerId = parseInt(val.replace('vv_', ''));
+  }
+}
+
+// ── SPEECH RECOGNITION ──
+function toggleListening() {
+  if (isListening) {
+    stopListening();
+  } else {
+    startListening();
+  }
+}
+
+function startListening() {
+  const key = document.getElementById('apiKeyInput').value.trim();
+  if (!key) {
+    alert('请先输入 API Key（Anthropic 或 OpenAI 均可）');
+    return;
+  }
+  apiKey = key;
+
+  if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+    alert('您的浏览器不支持语音识别，请使用 Chrome 浏览器');
+    return;
+  }
+
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  recognition = new SpeechRecognition();
+  recognition.lang = 'ja-JP';
+  recognition.continuous = true;
+  recognition.interimResults = true;
+  recognition.maxAlternatives = 1;
+
+  recognition.onstart = () => {
+    isListening = true;
+    updateStatus('listening');
+    document.getElementById('startBtn').textContent = '⏹ 停止监听';
+    document.getElementById('startBtn').className = 'btn danger';
+  };
+
+  let interimDebounceTimer = null;
+  let lastInterimText = '';
+
+  recognition.onresult = (event) => {
+    let interim = '';
+    let finalText = '';
+
+    for (let i = event.resultIndex; i < event.results.length; i++) {
+      const t = event.results[i][0].transcript;
+      if (event.results[i].isFinal) {
+        finalText += t;
+      } else {
+        interim += t;
+      }
+    }
+
+    if (interim) {
+      showInterim(interim);
+      // Debounce: if interim pauses for 800ms, treat as a sentence and trigger AI
+      clearTimeout(interimDebounceTimer);
+      lastInterimText = interim;
+      interimDebounceTimer = setTimeout(() => {
+        if (lastInterimText.length > 3) {
+          removeInterim();
+          addSTTEntry(lastInterimText.trim());
+          triggerAI(lastInterimText.trim());
+          lastInterimText = '';
+        }
+      }, 800);
+    }
+    if (finalText) {
+      clearTimeout(interimDebounceTimer);
+      lastInterimText = '';
+      removeInterim();
+      addSTTEntry(finalText.trim());
+      triggerAI(finalText.trim());
+    }
+  };
+
+  recognition.onerror = (e) => {
+    if (e.error !== 'no-speech') {
+      console.error('STT error:', e.error);
+      updateStatus('error');
+    }
+  };
+
+  recognition.onend = () => {
+    if (isListening) {
+      // auto restart
+      setTimeout(() => { if (isListening) recognition.start(); }, 500);
+    }
+  };
+
+  recognition.start();
+  document.getElementById('sttEmpty').style.display = 'none';
+  document.getElementById('aiEmpty').style.display = 'none';
+  document.getElementById('transEmpty').style.display = 'none';
+}
+
+function stopListening() {
+  isListening = false;
+  if (recognition) { recognition.stop(); recognition = null; }
+  updateStatus('stopped');
+  document.getElementById('startBtn').innerHTML = '<div class="dot"></div> 开始监听';
+  document.getElementById('startBtn').className = 'btn primary';
+  removeInterim();
+}
+
+// ── STATUS ──
+function updateStatus(state) {
+  const dot = document.getElementById('statusDot');
+  const txt = document.getElementById('statusText');
+  dot.className = 'status-dot';
+  if (state === 'listening') {
+    dot.classList.add('recording');
+    txt.textContent = '监听中...';
+    txt.style.color = '#ff6b6b';
+  } else if (state === 'processing') {
+    dot.classList.add('active');
+    txt.textContent = 'AI处理中';
+    txt.style.color = '#7c5cfc';
+  } else if (state === 'stopped') {
+    txt.textContent = '已停止';
+    txt.style.color = '#666680';
+  } else if (state === 'error') {
+    txt.textContent = '错误';
+    txt.style.color = '#ff6b6b';
+  } else {
+    txt.textContent = '未开始';
+    txt.style.color = '#666680';
+  }
+}
+
+// ── STT ENTRIES ──
+function showInterim(text) {
+  removeInterim();
+  const panel = document.getElementById('sttPanel');
+  const el = document.createElement('div');
+  el.className = 'stt-entry interim';
+  el.id = 'interimEntry';
+  el.innerHTML = `
+    <div class="stt-time">🎙️ 识别中...</div>
+    <div class="stt-text">${text}</div>
+    <div class="typing-indicator">
+      <div class="typing-dot"></div>
+      <div class="typing-dot"></div>
+      <div class="typing-dot"></div>
+    </div>`;
+  panel.appendChild(el);
+  panel.scrollTop = panel.scrollHeight;
+}
+
+function removeInterim() {
+  const el = document.getElementById('interimEntry');
+  if (el) el.remove();
+}
+
+function addSTTEntry(text) {
+  const panel = document.getElementById('sttPanel');
+  const el = document.createElement('div');
+  el.className = 'stt-entry';
+  const now = new Date().toLocaleTimeString('zh-CN', { hour:'2-digit', minute:'2-digit', second:'2-digit' });
+  el.innerHTML = `<div class="stt-time">${now}</div><div class="stt-text">${escHtml(text)}</div>`;
+  panel.appendChild(el);
+  panel.scrollTop = panel.scrollHeight;
+  entryCount++;
+  document.getElementById('entryCount').textContent = `${entryCount} 条记录`;
+  animateVolume();
+}
+
+// ── AI PROCESSING (并行 + 流式) ──
+async function triggerAI(japaneseText) {
+  if (!apiKey) return;
+  // 每句话独立并行调用，不排队
+  callAIStream(japaneseText);
+}
+
+async function callAIStream(text) {
+  const context = document.getElementById('contextInput').value.trim();
+  updateStatus('processing');
+
+  const aiPanel = document.getElementById('aiPanel');
+  const transPanel = document.getElementById('transPanel');
+
+  // 创建流式AI卡片占位
+  const cardEl = document.createElement('div');
+  cardEl.className = 'ai-card streaming';
+  const now = new Date().toLocaleTimeString('zh-CN', { hour:'2-digit', minute:'2-digit', second:'2-digit' });
+  cardEl.innerHTML = `
+    <div class="ai-card-meta">
+      <span class="ai-card-tag answer" id="cardTag_${Date.now()}">生成中</span>
+      <span class="ai-card-time">${now}</span>
+    </div>
+    <div class="ai-card-text stream-text"><span class="stream-cursor">▋</span></div>
+    <div class="ai-card-speak">🔊</div>`;
+  aiPanel.appendChild(cardEl);
+  aiPanel.scrollTop = aiPanel.scrollHeight;
+
+  // 翻译面板占位
+  const transEl = document.createElement('div');
+  transEl.className = 'trans-entry';
+  transEl.innerHTML = `
+    <div class="trans-label">主播说（日语）</div>
+    <div class="trans-jp">${escHtml(text)}</div>
+    <div class="trans-label" style="margin-top:6px">主播说（中文）</div>
+    <div class="trans-host" id="host_${uid}"><span class="stream-cursor">▋</span></div>
+    <div class="trans-label" style="margin-top:8px">AI回复建议</div>
+    <div class="trans-zh stream-trans"><span class="stream-cursor">▋</span></div>`;
+  transPanel.appendChild(transEl);
+  transPanel.scrollTop = transPanel.scrollHeight;
+
+  const streamTextEl = cardEl.querySelector('.stream-text');
+  const streamTransEl = transEl.querySelector('.stream-trans');
+  const tagEl = cardEl.querySelector('[id^="cardTag_"]');
+
+  const systemPrompt = `You are an ENERGETIC live commerce hype assistant. You watch a Japanese live stream host and generate EXCITED, HIGH-ENERGY Japanese comments like a passionate viewer who wants to buy everything.
+
+Rules:
+- Reply in JSON only. No markdown. No extra text.
+- "text": 1 excited Japanese sentence, max 30 chars, use やばい/絶対/最高/今すぐ/神, always use ！！
+- "translation": Chinese translation of your Japanese comment
+- "host_cn": Chinese translation of what the HOST said (the input text)
+- "response_type": "answer" | "product" | "warm" | "thanks"
+- NEVER sound calm — always maximum energy
+${context ? `Stream context: ${context}` : ''}
+
+Output ONLY this JSON (no markdown):
+{"text":"やばい！絶対買う！！","response_type":"warm","translation":"太棒了！绝对要买！！","host_cn":"主播说的话的中文翻译"}`;
+
+  try {
+    let fullText = '';
+
+    if (apiKey.startsWith('sk-ant')) {
+      // Anthropic 流式
+      const resp = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': apiKey,
+          'anthropic-version': '2023-06-01',
+          'anthropic-dangerous-direct-browser-access': 'true'
+        },
+        body: JSON.stringify({
+          model: 'claude-haiku-4-5-20251001',
+          max_tokens: 200,
+          stream: true,
+          system: systemPrompt,
+          messages: [{ role: 'user', content: `配信者が言った言葉: 「${text}」` }]
+        })
+      });
+
+      const reader = resp.body.getReader();
+      const decoder = new TextDecoder();
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        const chunk = decoder.decode(value);
+        const lines = chunk.split('\n');
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            try {
+              const data = JSON.parse(line.slice(6));
+              if (data.type === 'content_block_delta' && data.delta?.text) {
+                fullText += data.delta.text;
+                updateStreamDisplay(fullText, streamTextEl, streamTransEl, tagEl, cardEl);
+              }
+            } catch(e) {}
+          }
+        }
+      }
+    } else {
+      // OpenAI 流式
+      const resp = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+        body: JSON.stringify({
+          model: 'gpt-4o-mini',
+          max_tokens: 200,
+          stream: true,
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: `配信者が言った言葉: 「${text}」` }
+          ]
+        })
+      });
+
+      const reader = resp.body.getReader();
+      const decoder = new TextDecoder();
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        const chunk = decoder.decode(value);
+        const lines = chunk.split('\n');
+        for (const line of lines) {
+          if (line.startsWith('data: ') && line !== 'data: [DONE]') {
+            try {
+              const data = JSON.parse(line.slice(6));
+              const delta = data.choices?.[0]?.delta?.content;
+              if (delta) {
+                fullText += delta;
+                updateStreamDisplay(fullText, streamTextEl, streamTransEl, tagEl, cardEl);
+              }
+            } catch(e) {}
+          }
+        }
+      }
+    }
+
+    // 流式完成，最终解析
+    console.log('=== AI RAW OUTPUT ===', JSON.stringify(fullText));
+    finalizeCard(fullText, streamTextEl, streamTransEl, tagEl, cardEl, text);
+
+  } catch (err) {
+    console.error(err);
+    cardEl.remove();
+    transEl.remove();
+  }
+
+  if (isListening) updateStatus('listening');
+  else updateStatus('stopped');
+}
+
+// 从流式JSON中提取字段值（处理不完整的JSON）
+function extractJsonField(raw, field) {
+  // 方法1：完整JSON解析
+  try {
+    const cleaned = raw.replace(/```json|```/g, '').trim();
+    const parsed = JSON.parse(cleaned);
+    if (parsed[field] !== undefined) return String(parsed[field]);
+  } catch(e) {}
+
+  // 方法2：正则匹配（处理流式不完整情况）
+  // 匹配 "field": "value（可能未结束）
+  const re = new RegExp('"' + field + '"\\s*:\\s*"((?:[^"\\\\]|\\\\.)*)"?');
+  const m = raw.match(re);
+  if (m) {
+    return m[1].replace(/\\n/g,'\n').replace(/\\"/g,'"').replace(/\\\\/g,'\\');
+  }
+
+  // 方法3：匹配到引号开始但还没结束（流式进行中）
+  const rePartial = new RegExp('"' + field + '"\\s*:\\s*"([^]*)$');
+  const mp = raw.match(rePartial);
+  if (mp) {
+    return mp[1].replace(/\\n/g,'\n').replace(/\\"/g,'"').replace(/\\\\/g,'\\');
+  }
+
+  return null;
+}
+
+function updateStreamDisplay(raw, streamTextEl, streamTransEl, tagEl, cardEl) {
+  const textVal = extractJsonField(raw, 'text');
+  const transVal = extractJsonField(raw, 'translation');
+  const hostCnVal = extractJsonField(raw, 'host_cn');
+
+  if (textVal !== null && textVal.trim()) {
+    streamTextEl.innerHTML = escHtml(textVal) + '<span class="stream-cursor">▋</span>';
+  }
+  if (transVal !== null && transVal.trim()) {
+    streamTransEl.innerHTML = escHtml(transVal) + '<span class="stream-cursor">▋</span>';
+  }
+  // Find the host_cn element by looking up the uid from the cardEl
+  const uid = cardEl.querySelector('[id^="cardTag_"]')?.id?.replace('cardTag_','');
+  if (uid && hostCnVal !== null && hostCnVal.trim()) {
+    const hostEl = document.getElementById('host_' + uid);
+    if (hostEl) hostEl.innerHTML = escHtml(hostCnVal) + '<span class="stream-cursor">▋</span>';
+  }
+  document.getElementById('aiPanel').scrollTop = 99999;
+  document.getElementById('transPanel').scrollTop = 99999;
+}
+
+function finalizeCard(raw, streamTextEl, streamTransEl, tagEl, cardEl, sourceText) {
+  const tagLabels = { answer:'回答', product:'商品', warm:'暖场', thanks:'感谢' };
+
+  // 优先完整JSON解析
+  let parsed = null;
+  try {
+    parsed = JSON.parse(raw.replace(/```json|```/g, '').trim());
+  } catch(e) {
+    // JSON不完整，用正则兜底
+  }
+
+  const textVal = parsed?.text || extractJsonField(raw, 'text') || streamTextEl.textContent.replace('▋','').trim();
+  const transVal = parsed?.translation || extractJsonField(raw, 'translation') || streamTransEl.textContent.replace('▋','').trim();
+  const typeVal = parsed?.response_type || extractJsonField(raw, 'response_type') || 'answer';
+
+  if (tagEl) {
+    tagEl.className = `ai-card-tag ${typeVal}`;
+    tagEl.textContent = tagLabels[typeVal] || typeVal;
+  }
+  streamTextEl.innerHTML = escHtml(textVal || '（生成失败）');
+  streamTransEl.innerHTML = escHtml(transVal || '（翻译失败）');
+  // Finalize host Chinese translation
+  const uid2 = cardEl.querySelector('[id^="cardTag_"]')?.id?.replace('cardTag_','');
+  if (uid2) {
+    const hostCnVal = parsed?.host_cn || extractJsonField(raw, 'host_cn') || '';
+    const hostEl = document.getElementById('host_' + uid2);
+    if (hostEl) hostEl.innerHTML = escHtml(hostCnVal);
+  }
+  cardEl.classList.remove('streaming');
+  if (textVal) cardEl.onclick = () => speakText(textVal, cardEl);
+  enqueueSpeak(textVal, cardEl);
+}
+
+// ── AI CARDS (test mode fallback) ──
+function addAICard(text, type, translation, sourceText) {
+  const panel = document.getElementById('aiPanel');
+  const el = document.createElement('div');
+  el.className = 'ai-card';
+  const now = new Date().toLocaleTimeString('zh-CN', { hour:'2-digit', minute:'2-digit', second:'2-digit' });
+  const tagLabels = { answer:'回答', product:'商品', warm:'暖场', thanks:'感谢' };
+  el.innerHTML = `
+    <div class="ai-card-meta">
+      <span class="ai-card-tag ${type}">${tagLabels[type] || type}</span>
+      <span class="ai-card-time">${now}</span>
+    </div>
+    <div class="ai-card-text">${escHtml(text)}</div>
+    <div class="ai-card-speak">🔊</div>`;
+  el.onclick = () => speakText(text, el);
+  panel.appendChild(el);
+  panel.scrollTop = panel.scrollHeight;
+}
+
+// ── TRANSLATION PANEL ──
+function addTransEntry(jpText, aiText, aiTranslation) {
+  const panel = document.getElementById('transPanel');
+  const el = document.createElement('div');
+  el.className = 'trans-entry';
+  el.innerHTML = `
+    <div class="trans-label">主播说</div>
+    <div class="trans-jp">${escHtml(jpText)}</div>
+    <div class="trans-label" style="margin-top:10px">AI建议（中文）</div>
+    <div class="trans-zh">${escHtml(aiTranslation || '')}</div>`;
+  panel.appendChild(el);
+  panel.scrollTop = panel.scrollHeight;
+}
+
+// ── ARCHIVE ──
+function archiveSession() {
+  const sttPanel = document.getElementById('sttPanel');
+  const aiPanel = document.getElementById('aiPanel');
+  const transPanel = document.getElementById('transPanel');
+
+  const sttItems = [...sttPanel.querySelectorAll('.stt-entry:not(.interim)')].map(el => el.outerHTML);
+  const aiItems = [...aiPanel.querySelectorAll('.ai-card:not(.streaming)')].map(el => el.outerHTML);
+  const transItems = [...transPanel.querySelectorAll('.trans-entry')].map(el => el.outerHTML);
+
+  if (sttItems.length === 0 && aiItems.length === 0) {
+    alert('当前没有可归档的内容');
+    return;
+  }
+
+  const session = {
+    id: Date.now(),
+    date: new Date().toLocaleString('zh-CN'),
+    context: document.getElementById('contextInput').value.trim(),
+    count: sttItems.length,
+    stt: sttItems,
+    ai: aiItems,
+    trans: transItems
+  };
+
+  archives.unshift(session);
+  try { localStorage.setItem('la_archives', JSON.stringify(archives)); } catch(e){}
+
+  // 清空面板
+  clearPanel('stt');
+  clearPanel('ai');
+  clearPanel('trans');
+  entryCount = 0;
+  document.getElementById('entryCount').textContent = '0 条记录';
+
+  showToast(`✅ 已归档！共 ${session.count} 条记录`);
+  updateArchiveBadge();
+}
+
+function updateArchiveBadge() {
+  const badge = document.getElementById('archiveBadge');
+  if (archives.length > 0) {
+    badge.textContent = archives.length;
+    badge.style.display = 'inline-flex';
+  } else {
+    badge.style.display = 'none';
+  }
+}
+
+function openArchiveModal() {
+  renderArchiveList();
+  document.getElementById('archiveModal').style.display = 'flex';
+}
+
+function closeArchiveModal() {
+  document.getElementById('archiveModal').style.display = 'none';
+  document.getElementById('archiveDetail').style.display = 'none';
+  document.getElementById('archiveList').style.display = 'block';
+}
+
+function renderArchiveList() {
+  const list = document.getElementById('archiveListBody');
+  if (archives.length === 0) {
+    list.innerHTML = `<div class="archive-empty"><div style="font-size:40px;opacity:0.3">📦</div><div style="margin-top:10px;color:var(--muted);font-size:13px">暂无归档记录</div></div>`;
+    return;
+  }
+  list.innerHTML = archives.map((s, i) => `
+    <div class="archive-item" onclick="viewArchive(${i})">
+      <div class="archive-item-info">
+        <div class="archive-item-date">${s.date}</div>
+        <div class="archive-item-ctx">${s.context || '无场景备注'}</div>
+      </div>
+      <div class="archive-item-right">
+        <span class="archive-item-count">${s.count} 条</span>
+        <button class="archive-delete-btn" onclick="event.stopPropagation();deleteArchive(${i})">✕</button>
+      </div>
+    </div>
+  `).join('');
+}
+
+function viewArchive(idx) {
+  const s = archives[idx];
+  document.getElementById('archiveList').style.display = 'none';
+  const detail = document.getElementById('archiveDetail');
+  detail.style.display = 'flex';
+  document.getElementById('archiveDetailTitle').textContent = `${s.date}${s.context ? ' · ' + s.context : ''}`;
+
+  document.getElementById('archiveDetailStt').innerHTML = s.stt.join('') || '<div style="color:var(--muted);font-size:12px">无记录</div>';
+  document.getElementById('archiveDetailAi').innerHTML = s.ai.join('') || '<div style="color:var(--muted);font-size:12px">无记录</div>';
+  document.getElementById('archiveDetailTrans').innerHTML = s.trans.join('') || '<div style="color:var(--muted);font-size:12px">无记录</div>';
+}
+
+function backToArchiveList() {
+  document.getElementById('archiveDetail').style.display = 'none';
+  document.getElementById('archiveList').style.display = 'block';
+}
+
+function deleteArchive(idx) {
+  if (!confirm('确认删除这条归档？')) return;
+  archives.splice(idx, 1);
+  try { localStorage.setItem('la_archives', JSON.stringify(archives)); } catch(e){}
+  renderArchiveList();
+  updateArchiveBadge();
+}
+
+function showToast(msg) {
+  let toast = document.getElementById('toast');
+  if (!toast) {
+    toast = document.createElement('div');
+    toast.id = 'toast';
+    toast.style.cssText = 'position:fixed;bottom:70px;left:50%;transform:translateX(-50%);background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:10px 20px;border-radius:10px;font-size:13px;z-index:9999;transition:opacity 0.3s;pointer-events:none;';
+    document.body.appendChild(toast);
+  }
+  toast.textContent = msg;
+  toast.style.opacity = '1';
+  setTimeout(() => { toast.style.opacity = '0'; }, 2500);
+}
+
+// ── TTS ──
+function speakText(text, cardEl) {
+  // Manual click: cancel queue and speak immediately
+  speechSynthesis.cancel();
+  speakQueue = [];
+  isSpeakingQueue = false;
+  if (currentSpeakCard) currentSpeakCard.classList.remove('speaking');
+  doSpeak(text, cardEl);
+}
+
+function enqueueSpeak(text, cardEl) {
+  if (!autoPlay) return;
+  speakQueue.push({ text, cardEl });
+  if (!isSpeakingQueue) processSpeak();
+}
+
+function processSpeak() {
+  if (!speakQueue.length) { isSpeakingQueue = false; return; }
+  isSpeakingQueue = true;
+  const { text, cardEl } = speakQueue.shift();
+  doSpeak(text, cardEl, processSpeak);
+}
+
+async function doSpeak(text, cardEl, onDone) {
+  if (currentSpeakCard) currentSpeakCard.classList.remove('speaking');
+  currentSpeakCard = cardEl;
+  if (cardEl) cardEl.classList.add('speaking');
+  setCatState('talking');
+  isSpeaking = true;
+
+  const voiceVal = document.getElementById('voiceSelect').value;
+  const done = () => {
+    isSpeaking = false;
+    if (cardEl) cardEl.classList.remove('speaking');
+    currentSpeakCard = null;
+    setCatState('idle');
+    if (onDone) onDone();
+  };
+
+  if (vvOnline && voiceVal.startsWith('vv_')) {
+    // ── VOICEVOX TTS ──
+    const speakerId = parseInt(voiceVal.replace('vv_', ''));
+    try {
+      // Step 1: audio_query
+      const qResp = await fetch(
+        `http://localhost:50021/audio_query?text=${encodeURIComponent(text)}&speaker=${speakerId}`,
+        { method: 'POST', signal: AbortSignal.timeout(8000) }
+      );
+      const query = await qResp.json();
+
+      // Tune for hype energy: faster + slightly higher pitch
+      query.speedScale = 1.2;
+      query.pitchScale = 0.08;
+      query.intonationScale = 1.4;
+      query.volumeScale = 1.5;
+      query.prePhonemeLength = 0.05;
+      query.postPhonemeLength = 0.05;
+
+      // Step 2: synthesis
+      const sResp = await fetch(
+        `http://localhost:50021/synthesis?speaker=${speakerId}`,
+        { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(query), signal: AbortSignal.timeout(10000) }
+      );
+      const blob = await sResp.blob();
+      const url = URL.createObjectURL(blob);
+      const audio = new Audio(url);
+      audio.onended = () => { URL.revokeObjectURL(url); done(); };
+      audio.onerror = done;
+      audio.play();
+    } catch(e) {
+      console.warn('VOICEVOX error, fallback to system TTS', e);
+      speakFallback(text, done);
+    }
+  } else {
+    // ── System TTS fallback ──
+    speakFallback(text, done);
+  }
+}
+
+function speakFallback(text, done) {
+  const utter = new SpeechSynthesisUtterance(text);
+  utter.lang = 'ja-JP';
+  utter.pitch = 1.4;
+  utter.rate = 1.1;
+  const voiceVal = document.getElementById('voiceSelect').value;
+  if (voiceVal && !voiceVal.startsWith('vv_')) {
+    const v = speechSynthesis.getVoices().find(v => v.name === voiceVal);
+    if (v) utter.voice = v;
+  }
+  utter.onend = done;
+  utter.onerror = done;
+  speechSynthesis.speak(utter);
+}
+
+function toggleAutoPlay() {
+  autoPlay = !autoPlay;
+  const btn = document.getElementById('autoPlayBtn');
+  if (autoPlay) {
+    btn.className = 'btn danger';
+    btn.innerHTML = '🔴 实时回复 ON';
+    setCatState('excited');
+    setTimeout(() => setCatState('idle'), 1500);
+  } else {
+    btn.className = 'btn';
+    btn.innerHTML = '🎙️ 实时回复';
+    speechSynthesis.cancel();
+    speakQueue = [];
+    isSpeakingQueue = false;
+    setCatState('idle');
+  }
+}
+
+// ── UTILS ──
+function escHtml(t) {
+  return t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function clearPanel(panel) {
+  const ids = { stt: 'sttPanel', ai: 'aiPanel', trans: 'transPanel' };
+  const emptyIds = { stt: 'sttEmpty', ai: 'aiEmpty', trans: 'transEmpty' };
+  const p = document.getElementById(ids[panel]);
+  // keep empty state
+  const empties = p.querySelectorAll('.empty-state');
+  p.innerHTML = '';
+  empties.forEach(e => p.appendChild(e));
+  if (panel === 'stt') { entryCount = 0; document.getElementById('entryCount').textContent = '0 条记录'; }
+}
+
+function animateVolume() {
+  const bars = document.querySelectorAll('.vol-bar');
+  bars.forEach(b => {
+    b.classList.add('active');
+    b.style.height = Math.random() * 18 + 4 + 'px';
+  });
+  setTimeout(() => {
+    bars.forEach(b => {
+      b.classList.remove('active');
+      b.style.height = '6px';
+    });
+  }, 400);
+}
+
+// ── TEST MODE ──
+const testSamples = [
+  'こんにちは！今日はすごく特別なアイテムをご紹介します！',
+  'このファンデーションは本当に肌に優しくて、カバー力も抜群なんですよ！',
+  'お肌が敏感な方にも安心して使えるように作られています',
+  '今日は特別価格でご提供していますので、ぜひチェックしてみてください！',
+  'ありがとうございます！皆さんのご支持に感謝しています！',
+];
+let testIdx = 0;
+function testWithSample() {
+  const text = testSamples[testIdx % testSamples.length];
+  testIdx++;
+  document.getElementById('sttEmpty').style.display = 'none';
+  document.getElementById('aiEmpty').style.display = 'none';
+  document.getElementById('transEmpty').style.display = 'none';
+  addSTTEntry(text);
+
+  const key = document.getElementById('apiKeyInput').value.trim();
+  if (key) {
+    apiKey = key;
+    triggerAI(text);
+  } else {
+    // Mock response without API
+    setTimeout(() => {
+      const mockCards = [
+        { text: 'すごいですね！もっと詳しく教えてください！', type: 'warm', translation: '太棒了！请告诉我更多详情！' },
+        { text: 'お肌に優しいのはとても嬉しいです！', type: 'answer', translation: '对皮肤温和真的太好了！' },
+        { text: '価格はいくらですか？', type: 'product', translation: '价格是多少呢？' },
+      ];
+      const mock = mockCards[Math.floor(Math.random() * mockCards.length)];
+      addAICard(mock.text, mock.type, mock.translation, text);
+      addTransEntry(text, mock.text, mock.translation);
+    }, 800);
+  }
+}
+
+// Load API key from storage if available
+try {
+  const saved = localStorage.getItem('la_apikey');
+  if (saved) document.getElementById('apiKeyInput').value = saved;
+} catch(e){}
+
+document.getElementById('apiKeyInput').addEventListener('change', function() {
+  try { localStorage.setItem('la_apikey', this.value); } catch(e){}
+});
+</script>
+<!-- ARCHIVE MODAL -->
+<div id="archiveModal" style="display:none;position:fixed;inset:0;z-index:1000;background:rgba(0,0,0,0.7);align-items:center;justify-content:center;">
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:16px;width:900px;max-width:95vw;max-height:85vh;display:flex;flex-direction:column;overflow:hidden;">
+    <!-- Modal Header -->
+    <div style="display:flex;align-items:center;padding:16px 20px;border-bottom:1px solid var(--border);flex-shrink:0;">
+      <span style="font-family:'Space Mono',monospace;font-size:11px;font-weight:700;letter-spacing:2px;color:var(--accent);">ARCHIVE</span>
+      <span style="flex:1"></span>
+      <button class="btn" onclick="closeArchiveModal()" style="padding:4px 12px;font-size:10px;">✕ 关闭</button>
+    </div>
+
+    <!-- Archive List -->
+    <div id="archiveList" style="flex:1;overflow-y:auto;padding:16px;">
+      <div id="archiveListBody"></div>
+    </div>
+
+    <!-- Archive Detail -->
+    <div id="archiveDetail" style="display:none;flex:1;flex-direction:column;overflow:hidden;">
+      <div style="display:flex;align-items:center;gap:12px;padding:12px 20px;border-bottom:1px solid var(--border);flex-shrink:0;">
+        <button class="btn" onclick="backToArchiveList()" style="padding:4px 12px;font-size:10px;">← 返回</button>
+        <span id="archiveDetailTitle" style="font-size:12px;color:var(--muted);font-family:'Space Mono',monospace;"></span>
+      </div>
+      <div style="flex:1;display:grid;grid-template-columns:1fr 1fr 1fr;overflow:hidden;">
+        <div style="border-right:1px solid var(--border);overflow-y:auto;padding:14px 16px;">
+          <div style="font-family:'Space Mono',monospace;font-size:9px;color:var(--muted);margin-bottom:10px;letter-spacing:1px;">01 · 主播语音</div>
+          <div id="archiveDetailStt" style="display:flex;flex-direction:column;gap:10px;"></div>
+        </div>
+        <div style="border-right:1px solid var(--border);overflow-y:auto;padding:14px 16px;">
+          <div style="font-family:'Space Mono',monospace;font-size:9px;color:var(--muted);margin-bottom:10px;letter-spacing:1px;">02 · AI 话术</div>
+          <div id="archiveDetailAi" style="display:flex;flex-direction:column;gap:10px;"></div>
+        </div>
+        <div style="overflow-y:auto;padding:14px 16px;">
+          <div style="font-family:'Space Mono',monospace;font-size:9px;color:var(--muted);margin-bottom:10px;letter-spacing:1px;">03 · 中文翻译</div>
+          <div id="archiveDetailTrans" style="display:flex;flex-direction:column;gap:10px;"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// Init archive badge on load
+updateArchiveBadge();
+</script>
+
+<!-- CAT AVATAR -->
+<div id="catBubble"></div>
+<div id="catWrap">
+  <svg id="catAvatar" viewBox="0 0 120 160" xmlns="http://www.w3.org/2000/svg" onclick="catClick()"></svg>
+  <div id="catSwitcher">
+    <div class="cat-opt active" onclick="selectChar(0)" title="ミミ · 粉嫩少女">🌸</div>
+    <div class="cat-opt" onclick="selectChar(1)" title="ユキ · 冰蓝清冷">❄️</div>
+    <div class="cat-opt" onclick="selectChar(2)" title="ハナ · 暖橙元气">🔥</div>
+    <div class="cat-opt" onclick="selectChar(3)" title="ルナ · 紫魔法">✨</div>
+  </div>
+</div>
+
+<script>
+const CHARS = [
+  {
+    name: 'ミミ', color: '#f9a8d4',
+    phrases: ['かわいい！欲しい！！💕','買わなきゃ！！🛍️','やばい最高！！🌸','今すぐほしい！！💥','神商品！！にゃ！！⭐'],
+    idle: ['にゃ〜 (*ΦωΦ*)','ご主人様♡','(=^･ω･^=)ﾉ','待機中...にゃ'],
+    bubbleBorder: '#e879a0',
+    draw(svg) {
+      svg.innerHTML = `
+        <ellipse cx="60" cy="105" rx="34" ry="48" fill="#6366f1"/>
+        <path d="M38,108 L60,128 L82,108" stroke="white" stroke-width="3" fill="none" stroke-linejoin="round"/>
+        <polygon points="58,118 50,108 58,112 66,108" fill="#f472b6"/>
+        <circle cx="60" cy="119" r="4" fill="#fbbf24"/>
+        <path d="M17,95 Q8,140 14,158" stroke="#ffb7c5" stroke-width="16" fill="none" stroke-linecap="round"/>
+        <path d="M103,95 Q112,140 106,158" stroke="#ffb7c5" stroke-width="16" fill="none" stroke-linecap="round"/>
+        <ellipse cx="60" cy="78" rx="36" ry="40" fill="#fde8d8"/>
+        <polygon points="26,50 16,22 46,42" fill="#ffb7c5"/>
+        <polygon points="28,48 21,30 43,42" fill="#ffd6e0"/>
+        <polygon points="94,50 104,22 74,42" fill="#ffb7c5"/>
+        <polygon points="92,48 99,30 77,42" fill="#ffd6e0"/>
+        <path d="M24,55 Q60,36 96,55 Q84,48 72,46 Q60,44 48,46 Q36,48 24,55Z" fill="#ffb7c5"/>
+        <path d="M24,62 Q18,76 20,94" stroke="#ffc8d8" stroke-width="7" fill="none" stroke-linecap="round"/>
+        <path d="M96,62 Q102,76 100,94" stroke="#ffc8d8" stroke-width="7" fill="none" stroke-linecap="round"/>
+        <ellipse cx="46" cy="76" rx="9.5" ry="10.5" fill="white"/>
+        <ellipse cx="74" cy="76" rx="9.5" ry="10.5" fill="white"/>
+        <path d="M36,68 Q46,65 57,68" stroke="#4a0030" stroke-width="2" fill="none" stroke-linecap="round"/>
+        <path d="M63,68 Q74,65 85,68" stroke="#4a0030" stroke-width="2" fill="none" stroke-linecap="round"/>
+        <ellipse id="catEyeL" cx="46" cy="77" rx="6.5" ry="8" fill="#e879a0"/>
+        <ellipse id="catEyeR" cx="74" cy="77" rx="6.5" ry="8" fill="#e879a0"/>
+        <ellipse cx="46" cy="78" rx="3.5" ry="4.5" fill="#831843"/>
+        <ellipse cx="74" cy="78" rx="3.5" ry="4.5" fill="#831843"/>
+        <circle cx="49" cy="73" r="2.5" fill="white"/>
+        <circle cx="77" cy="73" r="2.5" fill="white"/>
+        <ellipse cx="32" cy="84" rx="9" ry="5" fill="#ffaec9" opacity="0.55"/>
+        <ellipse cx="88" cy="84" rx="9" ry="5" fill="#ffaec9" opacity="0.55"/>
+        <path d="M56,90 Q60,93 64,90" stroke="#e07b6a" stroke-width="1.2" fill="none" stroke-linecap="round"/>
+        <path id="catMouth" d="M52,98 Q60,106 68,98" stroke="#e06090" stroke-width="1.8" fill="none" stroke-linecap="round"/>
+        <path d="M56,98 L54,103" stroke="white" stroke-width="1.5" stroke-linecap="round"/>
+        <line x1="8" y1="81" x2="37" y2="84" stroke="#f9a8d4" stroke-width="0.8"/>
+        <line x1="6" y1="87" x2="36" y2="87" stroke="#f9a8d4" stroke-width="0.8"/>
+        <line x1="84" y1="84" x2="112" y2="81" stroke="#f9a8d4" stroke-width="0.8"/>
+        <line x1="84" y1="87" x2="114" y2="87" stroke="#f9a8d4" stroke-width="0.8"/>`;
+    }
+  },
+  {
+    name: 'ユキ', color: '#93c5fd',
+    phrases: ['絶対買う！神！！⚡','やばすぎ！！今すぐ！！🔥','これ最高！！にゃ！！💎','限定！急いで！！❄️','神回！買わなきゃ！！🌟'],
+    idle: ['...監視中','(－ω－) zzZ','やれやれ...にゃ','待機中...'],
+    bubbleBorder: '#38bdf8',
+    draw(svg) {
+      svg.innerHTML = `
+        <rect x="24" y="100" width="72" height="58" rx="10" fill="#1e3a5f"/>
+        <rect x="38" y="100" width="18" height="58" rx="4" fill="#0ea5e9" opacity="0.3"/>
+        <rect x="64" y="100" width="18" height="58" rx="4" fill="#0ea5e9" opacity="0.3"/>
+        <circle cx="60" cy="112" r="5" fill="#fbbf24"/>
+        <path d="M14,92 Q5,136 12,158" stroke="#93c5fd" stroke-width="17" fill="none" stroke-linecap="round"/>
+        <path d="M106,92 Q115,136 108,158" stroke="#93c5fd" stroke-width="17" fill="none" stroke-linecap="round"/>
+        <ellipse cx="60" cy="78" rx="36" ry="40" fill="#fde8d8"/>
+        <polygon points="24,50 13,18 48,40" fill="#bfdbfe"/>
+        <polygon points="26,48 18,26 45,40" fill="#dbeafe"/>
+        <polygon points="96,50 107,18 72,40" fill="#bfdbfe"/>
+        <polygon points="94,48 102,26 75,40" fill="#dbeafe"/>
+        <path d="M24,54 Q60,36 96,54 Q88,48 76,46 Q60,44 44,46 Q32,48 24,54Z" fill="#93c5fd"/>
+        <path d="M24,60 Q17,75 19,94" stroke="#bfdbfe" stroke-width="7" fill="none" stroke-linecap="round"/>
+        <path d="M96,60 Q103,75 101,94" stroke="#bfdbfe" stroke-width="7" fill="none" stroke-linecap="round"/>
+        <ellipse cx="46" cy="76" rx="9.5" ry="8.5" fill="white"/>
+        <ellipse cx="74" cy="76" rx="9.5" ry="8.5" fill="white"/>
+        <path d="M35,69 Q46,65 58,69" stroke="#1e3a5f" stroke-width="4" fill="none" stroke-linecap="round"/>
+        <path d="M62,69 Q74,65 86,69" stroke="#1e3a5f" stroke-width="4" fill="none" stroke-linecap="round"/>
+        <ellipse id="catEyeL" cx="46" cy="77" rx="6" ry="6.5" fill="#38bdf8"/>
+        <ellipse id="catEyeR" cx="74" cy="77" rx="6" ry="6.5" fill="#38bdf8"/>
+        <ellipse cx="46" cy="77" rx="3" ry="3.5" fill="#0c4a6e"/>
+        <ellipse cx="74" cy="77" rx="3" ry="3.5" fill="#0c4a6e"/>
+        <circle cx="49" cy="73" r="2" fill="white"/>
+        <circle cx="77" cy="73" r="2" fill="white"/>
+        <ellipse cx="32" cy="84" rx="8" ry="4.5" fill="#bae6fd" opacity="0.4"/>
+        <ellipse cx="88" cy="84" rx="8" ry="4.5" fill="#bae6fd" opacity="0.4"/>
+        <path d="M56,90 Q60,93 64,90" stroke="#d4a0a0" stroke-width="1" fill="none" stroke-linecap="round"/>
+        <path id="catMouth" d="M54,99 Q62,105 68,100" stroke="#c084b0" stroke-width="1.5" fill="none" stroke-linecap="round"/>
+        <line x1="8" y1="81" x2="38" y2="84" stroke="#bfdbfe" stroke-width="0.8"/>
+        <line x1="6" y1="87" x2="37" y2="87" stroke="#bfdbfe" stroke-width="0.8"/>
+        <line x1="83" y1="84" x2="112" y2="81" stroke="#bfdbfe" stroke-width="0.8"/>
+        <line x1="83" y1="87" x2="114" y2="87" stroke="#bfdbfe" stroke-width="0.8"/>`;
+    }
+  },
+  {
+    name: 'ハナ', color: '#fbbf24',
+    phrases: ['やばい！！買う！！🔥','神商品きた！！⚡','今すぐ！！絶対！！💥','テンション爆上がり！！🎉','これ最高すぎ！！🌟'],
+    idle: ['にゃんにゃん！🐾','元気100%！','(=^▽^=)','エネルギー充填中！'],
+    bubbleBorder: '#f59e0b',
+    draw(svg) {
+      svg.innerHTML = `
+        <rect x="22" y="100" width="76" height="58" rx="10" fill="#d97706"/>
+        <rect x="52" y="100" width="16" height="58" fill="#fbbf24" opacity="0.5"/>
+        <text x="60" y="146" font-size="20" text-anchor="middle" font-weight="900" fill="white" opacity="0.8">01</text>
+        <path d="M14,92 Q6,136 13,158" stroke="#fbbf24" stroke-width="15" fill="none" stroke-linecap="round"/>
+        <path d="M106,92 Q114,136 107,158" stroke="#fbbf24" stroke-width="15" fill="none" stroke-linecap="round"/>
+        <ellipse cx="60" cy="78" rx="36" ry="40" fill="#fde8d8"/>
+        <polygon points="24,50 14,16 50,40" fill="#fbbf24"/>
+        <polygon points="26,48 19,24 47,40" fill="#fef3c7"/>
+        <polygon points="96,50 106,16 70,40" fill="#fbbf24"/>
+        <polygon points="94,48 101,24 73,40" fill="#fef3c7"/>
+        <circle cx="26" cy="34" r="5" fill="#fffbeb" opacity="0.7"/>
+        <circle cx="94" cy="34" r="5" fill="#fffbeb" opacity="0.7"/>
+        <path d="M24,54 Q38,34 60,36 Q82,34 96,54 Q86,46 74,44 Q60,42 46,44 Q34,46 24,54Z" fill="#fbbf24"/>
+        <path d="M60,36 Q65,20 70,14 Q67,22 73,16" stroke="#fbbf24" stroke-width="4" fill="none" stroke-linecap="round"/>
+        <ellipse cx="46" cy="76" rx="10.5" ry="11.5" fill="white"/>
+        <ellipse cx="74" cy="76" rx="10.5" ry="11.5" fill="white"/>
+        <path d="M34,67 Q46,63 59,67" stroke="#431407" stroke-width="2.2" fill="none" stroke-linecap="round"/>
+        <path d="M61,67 Q74,63 87,67" stroke="#431407" stroke-width="2.2" fill="none" stroke-linecap="round"/>
+        <ellipse id="catEyeL" cx="46" cy="77" rx="7.5" ry="9" fill="#f59e0b"/>
+        <ellipse id="catEyeR" cx="74" cy="77" rx="7.5" ry="9" fill="#f59e0b"/>
+        <ellipse cx="46" cy="78" rx="4.5" ry="5.5" fill="#7c2d12"/>
+        <ellipse cx="74" cy="78" rx="4.5" ry="5.5" fill="#7c2d12"/>
+        <circle cx="50" cy="72" r="3" fill="white"/>
+        <circle cx="78" cy="72" r="3" fill="white"/>
+        <circle cx="42" cy="82" r="1.5" fill="white" opacity="0.6"/>
+        <circle cx="70" cy="82" r="1.5" fill="white" opacity="0.6"/>
+        <ellipse cx="30" cy="86" rx="10" ry="6" fill="#fca5a5" opacity="0.6"/>
+        <ellipse cx="90" cy="86" rx="10" ry="6" fill="#fca5a5" opacity="0.6"/>
+        <path d="M56,92 Q60,95 64,92" stroke="#e07b6a" stroke-width="1.2" fill="none" stroke-linecap="round"/>
+        <path id="catMouth" d="M50,100 Q60,112 70,100" stroke="#e06090" stroke-width="2" fill="none" stroke-linecap="round"/>
+        <path d="M54,100 L52,106" stroke="white" stroke-width="1.8" stroke-linecap="round"/>
+        <path d="M66,100 L68,106" stroke="white" stroke-width="1.8" stroke-linecap="round"/>
+        <line x1="6" y1="83" x2="36" y2="86" stroke="#fde68a" stroke-width="0.9"/>
+        <line x1="4" y1="89" x2="35" y2="89" stroke="#fde68a" stroke-width="0.9"/>
+        <line x1="85" y1="86" x2="114" y2="83" stroke="#fde68a" stroke-width="0.9"/>
+        <line x1="85" y1="89" x2="116" y2="89" stroke="#fde68a" stroke-width="0.9"/>`;
+    }
+  },
+  {
+    name: 'ルナ', color: '#c4b5fd',
+    phrases: ['絶対買う！！やばい！！🔥','神商品きた！！にゃ！！⚡','今すぐほしい！！💥','これ最高すぎる！！✨','みんな急いで！！🚨'],
+    idle: ['にゃ〜 (*ΦωΦ*)','ご主人様♡','にゃん？🐾','監視中...👁️'],
+    bubbleBorder: '#7c3aed',
+    draw(svg) {
+      svg.innerHTML = `
+        <rect x="20" y="100" width="80" height="58" rx="10" fill="#4c1d95"/>
+        <path d="M38,102 Q60,118 82,102" stroke="#c4b5fd" stroke-width="1.5" fill="none"/>
+        <circle cx="60" cy="113" r="6" fill="#fbbf24"/>
+        <path d="M60,107 L62,111 L67,111 L63,114 L65,119 L60,116 L55,119 L57,114 L53,111 L58,111Z" fill="#f59e0b"/>
+        <path d="M16,92 Q5,136 13,158" stroke="#7c3aed" stroke-width="17" fill="none" stroke-linecap="round"/>
+        <path d="M104,92 Q115,136 107,158" stroke="#7c3aed" stroke-width="17" fill="none" stroke-linecap="round"/>
+        <ellipse cx="60" cy="78" rx="36" ry="40" fill="#fde8d8"/>
+        <polygon points="22,50 10,14 50,40" fill="#7c3aed"/>
+        <polygon points="24,48 16,22 47,40" fill="#c4b5fd"/>
+        <polygon points="98,50 110,14 70,40" fill="#7c3aed"/>
+        <polygon points="96,48 104,22 73,40" fill="#c4b5fd"/>
+        <circle cx="32" cy="28" r="6" fill="#fbbf24"/>
+        <path d="M32,22 L34,26 L39,26 L35,29 L37,34 L32,31 L27,34 L29,29 L25,26 L30,26Z" fill="#ffd700" opacity="0.9"/>
+        <path d="M22,55 Q60,33 98,55 Q90,48 76,46 Q60,44 44,46 Q30,48 22,55Z" fill="#6d28d9"/>
+        <path d="M60,37 Q63,19 60,12" stroke="#7c3aed" stroke-width="4" fill="none" stroke-linecap="round"/>
+        <circle cx="60" cy="11" r="4" fill="#fbbf24"/>
+        <path d="M22,60 Q15,74 17,93" stroke="#8b5cf6" stroke-width="7" fill="none" stroke-linecap="round"/>
+        <path d="M98,60 Q105,74 103,93" stroke="#8b5cf6" stroke-width="7" fill="none" stroke-linecap="round"/>
+        <ellipse cx="46" cy="76" rx="9.5" ry="10.5" fill="white"/>
+        <ellipse cx="74" cy="76" rx="9.5" ry="10.5" fill="white"/>
+        <path d="M35,68 Q46,64 58,68" stroke="#1e0050" stroke-width="2.2" fill="none" stroke-linecap="round"/>
+        <path d="M62,68 Q74,64 87,68" stroke="#1e0050" stroke-width="2.2" fill="none" stroke-linecap="round"/>
+        <ellipse id="catEyeL" cx="46" cy="77" rx="6.5" ry="8" fill="#7c3aed"/>
+        <ellipse id="catEyeR" cx="74" cy="77" rx="6.5" ry="8" fill="#7c3aed"/>
+        <ellipse cx="46" cy="78" rx="3.5" ry="4.5" fill="#2e1065"/>
+        <ellipse cx="74" cy="78" rx="3.5" ry="4.5" fill="#2e1065"/>
+        <circle cx="49" cy="72" r="2.5" fill="white"/>
+        <circle cx="77" cy="72" r="2.5" fill="white"/>
+        <circle cx="43" cy="82" r="1.3" fill="white" opacity="0.7"/>
+        <circle cx="71" cy="82" r="1.3" fill="white" opacity="0.7"/>
+        <ellipse cx="32" cy="85" rx="9" ry="5" fill="#ddd6fe" opacity="0.45"/>
+        <ellipse cx="88" cy="85" rx="9" ry="5" fill="#ddd6fe" opacity="0.45"/>
+        <path d="M56,91 Q60,94 64,91" stroke="#d4a0a0" stroke-width="1.1" fill="none" stroke-linecap="round"/>
+        <path id="catMouth" d="M52,100 Q60,108 68,100" stroke="#be185d" stroke-width="1.6" fill="none" stroke-linecap="round"/>
+        <path d="M56,100 L54,105" stroke="white" stroke-width="1.5" stroke-linecap="round"/>
+        <line x1="8" y1="82" x2="37" y2="85" stroke="#c4b5fd" stroke-width="0.8"/>
+        <line x1="6" y1="88" x2="36" y2="88" stroke="#c4b5fd" stroke-width="0.8"/>
+        <line x1="84" y1="85" x2="112" y2="82" stroke="#c4b5fd" stroke-width="0.8"/>
+        <line x1="84" y1="88" x2="114" y2="88" stroke="#c4b5fd" stroke-width="0.8"/>`;
+    }
+  }
+];
+
+let currentCharIdx = 0;
+let catState = 'idle';
+let catBubbleTimer = null;
+
+function selectChar(idx) {
+  currentCharIdx = idx;
+  document.querySelectorAll('.cat-opt').forEach((el, i) => {
+    el.classList.toggle('active', i === idx);
+  });
+  const char = CHARS[idx];
+  const svg = document.getElementById('catAvatar');
+  char.draw(svg);
+  document.getElementById('catBubble').style.borderColor = char.bubbleBorder;
+  showCatBubble(char.name + ' にゃん！✨');
+  try { localStorage.setItem('la_char', idx); } catch(e) {}
+}
+
+function setCatState(state) {
+  const cat = document.getElementById('catAvatar');
+  const eyeL = document.getElementById('catEyeL');
+  const eyeR = document.getElementById('catEyeR');
+  const mouth = document.getElementById('catMouth');
+  if (!eyeL || !eyeR) return;
+  cat.classList.remove('talking','excited');
+  catState = state;
+  const baseRy = currentCharIdx === 1 ? 6.5 : currentCharIdx === 2 ? 9 : 8;
+
+  if (state === 'talking') {
+    cat.classList.add('talking');
+    const char = CHARS[currentCharIdx];
+    showCatBubble(char.phrases[Math.floor(Math.random()*char.phrases.length)]);
+    eyeL.setAttribute('ry', Math.max(3, baseRy-3));
+    eyeR.setAttribute('ry', Math.max(3, baseRy-3));
+    if (mouth) mouth.setAttribute('d', mouth.getAttribute('d').replace(/Q\d+,\d+/, m => {
+      const parts = m.split(','); return parts[0]+','+(parseInt(parts[1])+6);
+    }));
+  } else if (state === 'excited') {
+    cat.classList.add('excited');
+    showCatBubble('🔴 実時返信 ON！！やばい！！🎉');
+    eyeL.setAttribute('ry', baseRy+2);
+    eyeR.setAttribute('ry', baseRy+2);
+  } else {
+    eyeL.setAttribute('ry', baseRy);
+    eyeR.setAttribute('ry', baseRy);
+  }
+}
+
+function showCatBubble(text) {
+  const bubble = document.getElementById('catBubble');
+  bubble.textContent = text;
+  bubble.classList.add('show');
+  clearTimeout(catBubbleTimer);
+  catBubbleTimer = setTimeout(() => bubble.classList.remove('show'), 3000);
+}
+
+function catClick() {
+  if (catState === 'talking') return;
+  const char = CHARS[currentCharIdx];
+  const phrase = char.idle[Math.floor(Math.random()*char.idle.length)];
+  setCatState('excited');
+  showCatBubble(phrase);
+  setTimeout(() => setCatState('idle'), 1000);
+}
+
+setInterval(() => {
+  if (catState !== 'idle') return;
+  const eyeL = document.getElementById('catEyeL');
+  const eyeR = document.getElementById('catEyeR');
+  if (!eyeL) return;
+  const cur = parseFloat(eyeL.getAttribute('ry'));
+  eyeL.setAttribute('ry','1'); eyeR.setAttribute('ry','1');
+  setTimeout(() => { eyeL.setAttribute('ry', cur); eyeR.setAttribute('ry', cur); }, 150);
+}, 3200);
+
+setInterval(() => {
+  if (catState !== 'idle') return;
+  if (Math.random() > 0.4) return;
+  const char = CHARS[currentCharIdx];
+  showCatBubble(char.idle[Math.floor(Math.random()*char.idle.length)]);
+}, 8000);
+
+// Init
+try {
+  const saved = parseInt(localStorage.getItem('la_char') || '0');
+  selectChar(isNaN(saved) ? 0 : saved);
+} catch(e) { selectChar(0); }
+</script>
+</body>
+</html>
